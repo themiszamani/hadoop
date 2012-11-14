@@ -257,14 +257,14 @@ def create_machine(opts, c, i):
         log.info("Error locating server ip")
 
     # Ping machine until it comes alive
-    log.info("Ping...")
-    time.sleep(5)
+    #log.info("Ping...")
+    #time.sleep(5)
     cmd = "".join("ping -c 2 -w 3 %s" % (ip))
     while True:
         retval = cmd_execute(cmd)
         if (retval == 0):
             break    
-        time.sleep(8)
+        time.sleep(12)
     retval = cmd_execute(cmd)
 
     # Perform a short delay, before running rcp to get the hostname
@@ -273,7 +273,7 @@ def create_machine(opts, c, i):
     try:
         cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no root@%s:/etc/hostname %s/hostname_%d" % (ip, opts.hadoop_dir, i))
         retval = cmd_execute(cmd)
-        print "Returned value:", retval
+        #print "Returned value:", retval
     except:
         log.info("SSH error in getting hostname. Execution aborted.")
         return {}
@@ -300,17 +300,11 @@ def create_machine(opts, c, i):
             port = 10000 + int(ip.split('.')[3])
             cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no root@%s:/home/hduser/.ssh/id_rsa.pub %s/master_id_rsa_pub" % (ip, opts.hadoop_dir))
             retval = cmd_execute(cmd)
-            print "Returned value:", retval
+#            print "Returned value:", retval
         except:
             log.info("SSH error. Execution aborted.")
             return {}
         ssh.close()
-
-    # Read the respective (i-th) hostname file to get the hostname string and store it to a vector
-#    hostname_f = open('%s/hostname_%d' % (opts.hadoop_dir, i), 'r')
-#    line = hostname_f.readline()
-#    hostnames.append(line[:-1])
-#    hostname_f.close()
 
     log.info("Done.")
     if i!=0:
@@ -363,32 +357,29 @@ def main():
             if server == {}:
                 return;
             nodes.append(server)
-            #print "Created server = ", server
             servername = "%s-%d" % (opts.prefix, i)
             # Write the root password
             adminPass_f.write('machine = %s, password = %s\n' % (servername, server['adminPass']))
 
     adminPass_f.close()
+
+    # Read all the hostname files to get the hostname strings and store them in a vector
     for i in xrange(0, cnt):
         hname_f = open('%s/hostname_%d' % (opts.hadoop_dir, i), 'r')
         hostnames.append(hname_f.readline())
         hostnames[i] = hostnames[i][:-1]
         hname_f.close()
     
-    # Create the 'cluster' dictionary out of servers, with only hadoop-relevant keys
-    print hostnames
+    print "nodes=", nodes
+    # Setup Hadoop files and settings on all cluster nodes
     servers = c.list_servers(detail=True)
     cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
-    j=0
-    for s in cluster:
-        s["hostname"] = hostnames[j]
-        j = j+1
-
-    # Setup Hadoop files and settings on all cluster nodes
-    cluster = [(s["name"], s["attachments"]["values"][0]["ipv4"],s["hostname"]) for s in cluster]
-    print "Cluster v1:", cluster
+    cluster = [(s["name"], s["attachments"]["values"][0]["ipv4"]) for s in cluster]
     cluster = sorted(cluster)
-    print "Cluster v2:", cluster
+    #print "Cluster v2:", cluster
+
+    # Create the 'cluster' dictionary out of servers, with only hadoop-relevant keys
+    print "hostnames=", hostnames
 
     etc_hosts_f = open("/etc/hosts", "r")
     etc_hosts = etc_hosts_f.readlines()
@@ -397,14 +388,11 @@ def main():
     hadoop_ip_list = ""
     for i in xrange(0, cnt):
         for s in cluster:
-            #print s
             if s[0] == opts.prefix+"-"+str(i):
-                hadoop_ip_list = hadoop_ip_list + "".join("%s\t%s %s\n" % (s[1], s[0], s[2]))
+                hadoop_ip_list = hadoop_ip_list + "".join("%s\t%s %s\n" % (s[1], s[0], hostnames[i]))
 
     print "hadoop_ip_list="
     print hadoop_ip_list
-    #machines = "".join([s[0]+"," for s in cluster]) # list of ip
-    #machines = machines[:-1]
 
     # prepare hadoop config files
     template = open(opts.hadoop_dir+'/mapred-site-template.xml', 'r')
@@ -436,12 +424,12 @@ def main():
 
     i = 0 # 0-th node is the master
     for s in cluster:
-        print s
+        print "node = ",s
         log.info("Injecting files to node %s" % (s[1]))
 
         hosts = open(opts.hadoop_dir+'/hosts_'+str(i), 'w')
         hosts.write("127.0.0.1\tlocalhost\n")
-        hosts.write("".join("127.0.1.1\t%s\n" % (s[2])))
+        hosts.write("".join("127.0.1.1\t%s\n" % (hostnames[i])))
         hosts.write(hadoop_ip_list)
         for line in etc_hosts[3:]:
            hosts.write(line)
@@ -451,19 +439,19 @@ def main():
 
         cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no %s/hosts_%d root@%s:/etc/hosts" % (opts.hadoop_dir, i, s[1]))
         retval = cmd_execute(cmd)
-        print "Returned value:", retval
+        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/masters root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
-        print "Returned value:", retval
+        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/slaves root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
-        print "Returned value:", retval
+        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/mapred-site.xml root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
-        print "Returned value:", retval
+        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/core-site.xml root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
