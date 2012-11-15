@@ -72,6 +72,10 @@ def parse_arguments(args):
                       help="Number of virtual cluster nodes to create " \
                            "(mandatory argument)",
                       default=None)
+    parser.add_option("--extend",
+                      action="store_true", dest="extend",
+                      help="Extends an existing cluster with new nodes",
+                      default=False)
     parser.add_option("--cyclades",
                       action="store", type="string", dest="cyclades",
                       help=("The API URI to use to reach the Cyclades API " \
@@ -105,9 +109,6 @@ def parse_arguments(args):
                            "name starts with the specified prefix, see "\
                            "--prefix",
                       default=False)
-
-    # FIXME: Change the default for build-fanout to 10
-    # FIXME: Allow the user to specify a specific set of Images to test
 
     (opts, args) = parser.parse_args(args)
 
@@ -172,7 +173,7 @@ def cmd_execute(cmd):
 def create_machine(opts, c, i):
     """ Create a vm hadoop node """
     servername = "%s-%d" % (opts.prefix, i)
-    # print "i=",i, "servername=", servername
+    print "i=",i, "servername=", servername
     if i>0:
         # copy ssh key to both root and hduser accounts
         personality = [{"path": "/home/hduser/.ssh/authorized_keys",
@@ -215,7 +216,6 @@ def create_machine(opts, c, i):
                              personality=personality)
 
     # Wait until all servers are up and running
-    # log.info("Done. Waiting for node to become ACTIVE...")
     while True:
         done = False
         while not done:
@@ -225,11 +225,10 @@ def create_machine(opts, c, i):
             except:
                 log.info("Will retry...")
                 pass
-#       cluster = [s for s in servers if (s["name"].startswith(opts.prefix) and (s["name"].startswith(opts.prefix+"-0")==False))]
         cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
 
         active = [s for s in cluster if s["status"] == "ACTIVE"]
-        attached = [s for s in cluster if "attachments" in s]
+        #attached = [s for s in cluster if "attachments" in s]
         build = [s for s in cluster if s["status"] == "BUILD"]
         error = [s for s in cluster if s["status"] not in ("ACTIVE", "BUILD")]
         if error:
@@ -249,22 +248,18 @@ def create_machine(opts, c, i):
     ip = ''
     servers = c.list_servers(detail=True)
     for item in servers: 
-        #print item
         if item["name"] == servername:
             ip = item["attachments"]["values"][0]["ipv4"]
-	    #print "ip=", ip
     if ip=='':
         log.info("Error locating server ip")
 
     # Ping machine until it comes alive
-    #log.info("Ping...")
-    #time.sleep(5)
     cmd = "".join("ping -c 2 -w 3 %s" % (ip))
     while True:
         retval = cmd_execute(cmd)
         if (retval == 0):
             break    
-        time.sleep(12)
+        time.sleep(13)
     retval = cmd_execute(cmd)
 
     # Perform a short delay, before running rcp to get the hostname
@@ -273,7 +268,6 @@ def create_machine(opts, c, i):
     try:
         cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no root@%s:/etc/hostname %s/hostname_%d" % (ip, opts.hadoop_dir, i))
         retval = cmd_execute(cmd)
-        #print "Returned value:", retval
     except:
         log.info("SSH error in getting hostname. Execution aborted.")
         return {}
@@ -286,31 +280,26 @@ def create_machine(opts, c, i):
         try:
             ssh.connect(ip, username = 'hduser')
 	    ssh_cmd = 'ssh-keygen -q -t rsa -P \"\" -f /home/hduser/.ssh/id_rsa'
-            #print ssh_cmd
             stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
             time.sleep(2)
             output = stdout.readlines()
-	    #print output
             ssh_cmd = 'cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
-            #print ssh_cmd
             stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
             time.sleep(2)
             output = stdout.readlines()
-	    #print output
-            port = 10000 + int(ip.split('.')[3])
+#            ssh_cmd = 'rm -rf /app/hadoop/tmp/dfs/data'
+#            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
+#           port = 10000 + int(ip.split('.')[3])
             cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no root@%s:/home/hduser/.ssh/id_rsa.pub %s/master_id_rsa_pub" % (ip, opts.hadoop_dir))
             retval = cmd_execute(cmd)
-#            print "Returned value:", retval
         except:
             log.info("SSH error. Execution aborted.")
             return {}
         ssh.close()
 
     log.info("Done.")
-    if i!=0:
-        return server
-    else:
-	return {'node_id': '0'}
+    # CHECK!
+    return server
 
 
 def main():
@@ -340,43 +329,53 @@ def main():
     pass_fname = opts.hadoop_dir+'/bak/adminPass'+str(datetime.now())[:19].replace(' ', '')
     adminPass_f = open(pass_fname, 'w')
 
-    # Create master node (0th node)
+    initialClusterSize = 0
     server = {}
-    server = create_machine(opts, c, 0)
-    if server == {}:
-        return;
+    if opts.extend == False:
+        # Create master node (0th node)
+        server = create_machine(opts, c, 0)
+        if server == {}:
+            return
+    else:
+        servers = c.list_servers(detail=True)
+        cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
+        initialClusterSize = len(cluster)
+        print "initialClusterSize=",initialClusterSize
+        if initialClusterSize==0:
+            log.info("Cluster cannot be expanded since it does not exist.")
+            return
+
     servername = "%s-0" % (opts.prefix)
     masterName = servername
     nodes.append(server)
 
     # Create slave nodes
-    if cnt>1:
-        for i in xrange(1, cnt):
+    if cnt>1 or opts.extend:
+        for i in xrange(initialClusterSize, initialClusterSize+cnt):
             server = {}
             server = create_machine(opts, c, i)
             if server == {}:
                 return;
             nodes.append(server)
             servername = "%s-%d" % (opts.prefix, i)
-            # Write the root password
+            # Write the root password to a file
             adminPass_f.write('machine = %s, password = %s\n' % (servername, server['adminPass']))
 
     adminPass_f.close()
 
     # Read all the hostname files to get the hostname strings and store them in a vector
-    for i in xrange(0, cnt):
+    for i in xrange(0, initialClusterSize+cnt):
         hname_f = open('%s/hostname_%d' % (opts.hadoop_dir, i), 'r')
         hostnames.append(hname_f.readline())
         hostnames[i] = hostnames[i][:-1]
         hname_f.close()
     
-    print "nodes=", nodes
     # Setup Hadoop files and settings on all cluster nodes
     servers = c.list_servers(detail=True)
     cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
     cluster = [(s["name"], s["attachments"]["values"][0]["ipv4"]) for s in cluster]
     cluster = sorted(cluster)
-    #print "Cluster v2:", cluster
+    print "Cluster v2:", cluster
 
     # Create the 'cluster' dictionary out of servers, with only hadoop-relevant keys
     print "hostnames=", hostnames
@@ -386,7 +385,7 @@ def main():
     etc_hosts_f.close()
 
     hadoop_ip_list = ""
-    for i in xrange(0, cnt):
+    for i in xrange(0, initialClusterSize+cnt):
         for s in cluster:
             if s[0] == opts.prefix+"-"+str(i):
                 hadoop_ip_list = hadoop_ip_list + "".join("%s\t%s %s\n" % (s[1], s[0], hostnames[i]))
@@ -424,14 +423,15 @@ def main():
 
     i = 0 # 0-th node is the master
     for s in cluster:
-        print "node = ",s
+        # print "cluster node = ",s
         log.info("Injecting files to node %s" % (s[1]))
 
+        # Create i-th hosts file from /etc/hosts + hostnames
         hosts = open(opts.hadoop_dir+'/hosts_'+str(i), 'w')
         hosts.write("127.0.0.1\tlocalhost\n")
         hosts.write("".join("127.0.1.1\t%s\n" % (hostnames[i])))
         hosts.write(hadoop_ip_list)
-        for line in etc_hosts[3:]:
+        for line in etc_hosts[-7:]:
            hosts.write(line)
         hosts.close()
 
@@ -439,23 +439,18 @@ def main():
 
         cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no %s/hosts_%d root@%s:/etc/hosts" % (opts.hadoop_dir, i, s[1]))
         retval = cmd_execute(cmd)
-        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/masters root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
-        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/slaves root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
-        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/mapred-site.xml root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
-        #print "Returned value:", retval
 
         cmd = "".join("rcp -o StrictHostKeyChecking=no %s/core-site.xml root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
         retval = cmd_execute(cmd)
-        print "Returned value:", retval
 
         i = i+1
 
