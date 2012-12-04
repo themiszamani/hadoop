@@ -226,13 +226,14 @@ def create_machine(opts, c, i):
                 log.info("Will retry...")
                 pass
         cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
+        time.sleep(1)
 
         active = [s for s in cluster if s["status"] == "ACTIVE"]
         build = [s for s in cluster if s["status"] == "BUILD"]
         error = [s for s in cluster if s["status"] not in ("ACTIVE", "BUILD")]
         if error:
             log.fatal("Server failed.")
-	    print "Cluster = ", cluster
+	    print "error = ", error
             return {}
         for n in cluster:
             if n["name"] == servername: progress = n["progress"]
@@ -242,6 +243,8 @@ def create_machine(opts, c, i):
             break
         time.sleep(2)
 
+    time.sleep(2)
+    # print "server=", server
     print
     # Find machine's ip
     ip = ''
@@ -296,8 +299,7 @@ def create_machine(opts, c, i):
             log.info("SSH error. Execution aborted.")
             return {}
         ssh.close()
-    '''
-    elif opts.extend:
+    else: #elf opts.extend:
 #        log.info("(Installing jps)")
         log.info("(Clearing HDFS)")
         ssh = paramiko.SSHClient()
@@ -312,9 +314,7 @@ def create_machine(opts, c, i):
         except:
             log.info("SSH error. Execution aborted.")
             return {}
-        ssh.close()
-    '''
-    log.info("Done.")
+        ssh.close()    
     # CHECK!
     return server
 
@@ -395,7 +395,7 @@ def main():
     cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
     cluster = [(s["name"], s["attachments"]["values"][0]["ipv4"], int(s["name"][s["name"].find('-')+1:]), hostnames[int(s["name"][s["name"].find('-')+1:])]) for s in cluster]
     cluster = sorted(cluster, key=lambda cluster: cluster[2])
-    print "Cluster v2:", cluster
+    #print "Cluster: ", cluster
 
     etc_hosts_f = open("/etc/hosts", "r")
     etc_hosts = etc_hosts_f.readlines()
@@ -438,12 +438,12 @@ def main():
     i = 0 # start from 0-th node is the master
     for s in cluster:
         # print "cluster node = ",s
-        log.info("Injecting files to node %d (%s, %s)" % (i, s[1], hostnames[i]))
+        log.info("Injecting files to node %d/%d (%s, %s)" % (i+1, len(cluster), s[1], s[3]))
 
         # Create i-th hosts file from /etc/hosts + hostnames
         hosts = open(opts.hadoop_dir+'/hosts_'+str(i), 'w')
         hosts.write("127.0.0.1\tlocalhost\n")
-        hosts.write("".join("127.0.1.1\t%s\n" % (hostnames[i])))
+        hosts.write("".join("127.0.1.1\t%s\n" % (s[3])))
         hosts.write(hadoop_ip_list)
         for line in etc_hosts[-7:]:
            hosts.write(line)
@@ -463,6 +463,7 @@ def main():
             retval = cmd_execute(cmd)
 
         i = i+1
+    log.info("Done.")
 
 if __name__ == "__main__":
     sys.exit(main())
