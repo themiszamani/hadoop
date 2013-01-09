@@ -243,17 +243,20 @@ def create_machine(opts, c, i):
             break
         time.sleep(2)
 
-    time.sleep(2)
-    # print "server=", server
-    print
+    time.sleep(5)
     # Find machine's ip
     ip = ''
     servers = c.list_servers(detail=True)
     for item in servers: 
         if item["name"] == servername:
-            ip = item["attachments"]["values"][0]["ipv4"]
+            if "attachments" in item:
+                print "item=", item
+                if "values" in item["attachments"]:
+                    if "ipv4" in item["attachments"]["values"][0]:
+                        ip = item["attachments"]["values"][0]["ipv4"]
     if ip=='':
-        log.info("Error locating server ip")
+        log.info("Error locating server ip. Execution aborted.")
+        return {}
 
     # Ping machine until it comes alive
     cmd = "".join("ping -c 2 -w 3 %s" % (ip))
@@ -280,7 +283,14 @@ def create_machine(opts, c, i):
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            ssh.connect(ip, username = 'hduser')
+            ssh.connect(ip, username = 'root')
+	    ssh_cmd = 'echo \"hduser:hduser123\" | chpasswd'
+            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
+            time.sleep(2)
+            output = stdout.readlines()
+            shh.close()
+            time.sleep(1)
+            ssh.connect(ip, username = 'hduser', password = "hduser123")
 	    ssh_cmd = 'ssh-keygen -q -t rsa -P \"\" -f /home/hduser/.ssh/id_rsa'
             stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
             time.sleep(2)
@@ -409,7 +419,7 @@ def main():
 
     # prepare hadoop config files (mapred, core, masters, slaves)
     template = open(opts.hadoop_dir+'/mapred-site-template.xml', 'r')
-    mapred = open(opts.hadoop_dir+'/mapred-site.xml', 'w')
+    mapred = open(opts.hadoop_dir+'/conf/mapred-site.xml', 'w')
     for line in template.readlines():
         line = line.replace("MASTER_IP",masterName).strip()
         mapred.write(line+'\n')
@@ -417,18 +427,18 @@ def main():
     mapred.close()
 
     template = open(opts.hadoop_dir+'/core-site-template.xml', 'r')
-    core = open(opts.hadoop_dir+'/core-site.xml', 'w')
+    core = open(opts.hadoop_dir+'/conf/core-site.xml', 'w')
     for line in template.readlines():
         line = line.replace("MASTER_IP",masterName).strip()
         core.write(line+'\n')
     template.close()
     core.close()
 
-    masters = open(opts.hadoop_dir+'/masters', 'w')
+    masters = open(opts.hadoop_dir+'/conf/masters', 'w')
     masters.write(masterName+'\n')
     masters.close()
 
-    slaves = open(opts.hadoop_dir+'/slaves', 'w')
+    slaves = open(opts.hadoop_dir+'/conf/slaves', 'w')
     i=0
     for s in cluster:
         slaves.write(opts.prefix+"-"+str(i)+'\n')
@@ -456,10 +466,10 @@ def main():
 
         # masters/*xml only if extend
         if i>=initialClusterSize:
-	    cmd = "".join("rcp -o StrictHostKeyChecking=no %s/masters %s/[mc]*-site.xml root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, opts.hadoop_dir,  s[1]))
+	    cmd = "".join("rcp -o StrictHostKeyChecking=no %s/conf/* root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
             retval = cmd_execute(cmd)
         else:
-            cmd = "".join("rcp -o StrictHostKeyChecking=no %s/slaves %s/masters %s/[mc]*-site.xml root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, opts.hadoop_dir, opts.hadoop_dir,  s[1]))
+            cmd = "".join("rcp -o StrictHostKeyChecking=no %s/conf/* root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
             retval = cmd_execute(cmd)
 
         i = i+1
