@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Create a multi-node hadoop cluster on top of ~okeanos
+Create a multi-node Hadoop cluster on top of ~okeanos
 Based on okeanos_cluster.py (vkoukis?)
 Based on HBaseCluster (cslab)
 
@@ -41,21 +41,14 @@ log.setLevel(logging.INFO)
 
 hostnames = [] # store hostnames of nodes
 
-'''
-class HadoopCluster(object):
-
-    def addSlave():
-
-    def Create():
-'''
-
 def parse_arguments(args):
+    """ Parse command-line arguments, get values """
     from optparse import OptionParser
 
     kw = {}
     kw["usage"] = "%prog [options]"
     kw["description"] = \
-        "%prog creates and configures a hadoop multi-node cluster on top of ~okeanos."
+        "%prog creates and configures a Hadoop multi-node cluster on top of ~okeanos."
 
     parser = OptionParser(**kw)
     parser.disable_interspersed_args()
@@ -136,8 +129,9 @@ def parse_arguments(args):
 
 
 def cleanup_servers(prefix=DEFAULT_PREFIX, delete_stale=False):
+    """ Cleanup stale servers """
     c = ComputeClient(CYCLADES, TOKEN)
-
+ 
     servers = c.list_servers()
     stale = [s for s in servers if s["name"].startswith(prefix)]
 
@@ -171,10 +165,9 @@ def cmd_execute(cmd):
 
 
 def create_machine(opts, c, i):
-    """ Create a vm hadoop node """
+    """ Create the i-th Hadoop node (vm) """
     servername = "%s-%d" % (opts.prefix, i)
-    #print "i=",i, "servername=", servername
-    if i>0:
+    if i>0: # worker
         # copy ssh key to both root and hduser accounts
         personality = [{"path": "/home/hduser/.ssh/authorized_keys",
                         "owner": "hduser", "group": "hadoop",
@@ -192,7 +185,7 @@ def create_machine(opts, c, i):
                         "owner": "root", "group": "root",
                         "mode": 0600,
                         "contents": b64encode("StrictHostKeyChecking no")}]
-    else:
+    else: # master
         personality = [{"path": "/home/hduser/.ssh/authorized_keys",
                         "owner": "hduser", "group": "hadoop",
                         "mode": 0600,
@@ -215,7 +208,7 @@ def create_machine(opts, c, i):
                              opts.imageid,
                              personality=personality)
 
-    # Wait until server ((vm) is up and running
+    # Wait until server is up and running
     while True:
         done = False
         while not done:
@@ -277,7 +270,7 @@ def create_machine(opts, c, i):
         log.info("SSH error in getting hostname. Execution aborted.")
         return {}
 
-    if i==0:
+    if i==0: # master
         log.info("Preparing master key...")
 
         ssh = paramiko.SSHClient()
@@ -299,18 +292,13 @@ def create_machine(opts, c, i):
             stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
             time.sleep(2)
             output = stdout.readlines()
-#            ssh_cmd = 'apt-get update; apt-get -y install openjdk-6-jdk' # ;rm -rf /app/hadoop/tmp/dfs/data/'
-#            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
-#            output = stdout.readlines()
-#           port = 10000 + int(ip.split('.')[3])
             cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no root@%s:/home/hduser/.ssh/id_rsa.pub %s/master_id_rsa_pub" % (ip, opts.hadoop_dir))
             retval = cmd_execute(cmd)
         except:
             log.info("SSH error. Execution aborted.")
             return {}
         ssh.close()
-    else: #elf opts.extend:
-#        log.info("(Installing jps)")
+    else: # worker
         log.info("(Clearing HDFS)")
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -367,16 +355,15 @@ def main():
         servers = c.list_servers(detail=True)
         cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
         initialClusterSize = len(cluster)
-        # print "initialClusterSize=",initialClusterSize
         if initialClusterSize==0:
-            log.info("Cluster cannot be expanded since it does not exist.")
+            log.info("Cluster cannot be expanded: it does not exist.")
             return
 
     servername = "%s-0" % (opts.prefix)
     masterName = servername
     nodes.append(server)
 
-    # Create slave nodes
+    # Create slave (worker) nodes
     if cnt>1 or opts.extend:
         startingOffset = 1
         if opts.extend: startingOffset = initialClusterSize
@@ -400,12 +387,11 @@ def main():
         hname_f.close()
     
     # Setup Hadoop files and settings on all cluster nodes
-    # Create the 'cluster' dictionary out of servers, with only hadoop-relevant keys
+    # Create the 'cluster' dictionary out of servers, with only Hadoop-relevant keys
     servers = c.list_servers(detail=True)
     cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
     cluster = [(s["name"], s["attachments"]["values"][0]["ipv4"], int(s["name"][s["name"].find('-')+1:]), hostnames[int(s["name"][s["name"].find('-')+1:])]) for s in cluster]
     cluster = sorted(cluster, key=lambda cluster: cluster[2])
-    #print "Cluster: ", cluster
 
     etc_hosts_f = open("/etc/hosts", "r")
     etc_hosts = etc_hosts_f.readlines()
@@ -417,7 +403,7 @@ def main():
             if s[0] == opts.prefix+"-"+str(i):
                 hadoop_ip_list = hadoop_ip_list + "".join("%s\t%s %s\n" % (s[1], s[0], hostnames[i]))
 
-    # prepare hadoop config files (mapred, core, masters, slaves)
+    # prepare Hadoop config files (mapred, core, masters, slaves)
     template = open(opts.hadoop_dir+'/mapred-site-template.xml', 'r')
     mapred = open(opts.hadoop_dir+'/conf/mapred-site.xml', 'w')
     for line in template.readlines():
@@ -445,9 +431,8 @@ def main():
         i=i+1
     slaves.close()
 
-    i = 0 # start from 0-th node is the master
+    i = 0 # start from 0-th node (master)
     for s in cluster:
-        # print "cluster node = ",s
         log.info("Injecting files to node %d/%d (%s, %s)" % (i+1, len(cluster), s[1], s[3]))
 
         # Create i-th hosts file from /etc/hosts + hostnames
@@ -464,13 +449,8 @@ def main():
         cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no %s/hosts_%d root@%s:/etc/hosts" % (opts.hadoop_dir, i, s[1]))
         retval = cmd_execute(cmd)
 
-        # masters/*xml only if extend
-        if i>=initialClusterSize:
-	    cmd = "".join("rcp -o StrictHostKeyChecking=no %s/conf/* root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
-            retval = cmd_execute(cmd)
-        else:
-            cmd = "".join("rcp -o StrictHostKeyChecking=no %s/conf/* root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
-            retval = cmd_execute(cmd)
+        cmd = "".join("rcp -o StrictHostKeyChecking=no %s/conf/* root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
+        retval = cmd_execute(cmd)
 
         i = i+1
     log.info("Done.")
