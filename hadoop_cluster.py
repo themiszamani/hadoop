@@ -239,11 +239,13 @@ def create_machine(opts, c, i):
     time.sleep(5)
     # Find machine's ip
     ip = ''
+    adminPass = ''
     servers = c.list_servers(detail=True)
     for item in servers: 
         if item["name"] == servername:
+            adminPass = server['adminPass']
             if "attachments" in item:
-                print "item=", item
+                log.info("item=%s", item)
                 if "values" in item["attachments"]:
                     if "ipv4" in item["attachments"]["values"][0]:
                         ip = item["attachments"]["values"][0]["ipv4"]
@@ -277,11 +279,13 @@ def create_machine(opts, c, i):
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
             ssh.connect(ip, username = 'root')
+            log.info("ssh as root@%s succeeded.", ip)
 	    ssh_cmd = 'echo \"hduser:hduser123\" | chpasswd'
             stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
             time.sleep(2)
             output = stdout.readlines()
             shh.close()
+            log.info("chpasswd succeeded.")
             time.sleep(1)
             ssh.connect(ip, username = 'hduser', password = "hduser123")
 	    ssh_cmd = 'ssh-keygen -q -t rsa -P \"\" -f /home/hduser/.ssh/id_rsa'
@@ -296,6 +300,7 @@ def create_machine(opts, c, i):
             retval = cmd_execute(cmd)
         except:
             log.info("SSH error. Execution aborted.")
+	    print "root password: " + adminPass
             return {}
         ssh.close()
     else: # worker
