@@ -6,3 +6,6 @@
   - name: install jdk 1.6
     action: apt name=openjdk-6-jdk state=latest install_recommends=no 
 
+  - name: create hadoop group
+    action: group name=hadoop state=present
+
