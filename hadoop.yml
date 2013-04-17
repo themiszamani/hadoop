@@ -22,11 +22,11 @@
     action: file path=~hduser/.ssh owner=hduser group=hadoop mode=0700 state=directory
 
   - name: copy authorized_keys to hduser .ssh directory
-    tags: copy
+    tags: copyauth
     action: copy src=/root/.ssh/id_rsa.pub dest=~hduser/.ssh/authorized_keys owner=hduser group=hadoop mode=0600
 
   - name: disable IPV6
-    tags: lineinfile
+    tags: ipv6
     action: lineinfile dest=/etc/sysctl.conf state=present insertafter=EOF regexp="^"  line="net.ipv6.conf.all.disable_ipv6 = 1\nnet.ipv6.conf.default.disable_ipv6 = 1\nnet.ipv6.conf.lo.disable_ipv6 = 1"
 
   - name: update ~/.bashrc file
@@ -52,7 +52,11 @@
 
   - name: create app/hadoop/tmp to store HDFS
     tags: tmp
-    action: command mkdir -p /app/hadoop/tmp; chown hduser:hadoop /app/hadoop/tmp; chmod 750 /app/hadoop/tmp
+    action: |
+      command /bin/sh -c '
+      mkdir -p /app/hadoop/tmp
+      chown hduser:hadoop /app/hadoop/tmp
+      chmod 750 /app/hadoop/tmp'
 
   - name: copy core-site.xml to /usr/local/hadoop/conf directory
     tags: copyxml0
