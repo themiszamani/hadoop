@@ -1,0 +1,22 @@
+---
+  - name: copy core-site.xml to /usr/local/hadoop/conf directory
+    tags: copyxml0
+    action: copy src=/root/hadoop/conf/core-site-template.xml dest=/usr/local/hadoop/conf/core-site.xml owner=hduser group=hadoop
+
+  - name: modify core-site.xml to replace master ip
+    tags: modifyxml0
+    action: lineinfile dest=/usr/local/hadoop/conf/core-site.xml state=present regexp="MASTER_IP" line="  <value>hdfs://{{ master_ip }}:54310</value>"
+
+  - name: copy mapred-site.xml to /usr/local/hadoop/conf directory
+    tags: copyxml1
+    action: copy src=/root/hadoop/conf/mapred-site-template.xml dest=/usr/local/hadoop/conf/mapred-site.xml owner=hduser group=hadoop
+
+  - name: modify mapred-site.xml to replace master ip
+    tags: modifyxml1
+    action: lineinfile dest=/usr/local/hadoop/conf/mapred-site.xml state=present regexp="MASTER_IP" line="  <value>{{ master_ip }}:54311</value>"
+
+  - name: copy hdfs-site.xml (with terasort-specific values) to /usr/local/hadoop/conf directory
+    tags: copyxml2
+    action: copy src=/root/hadoop/conf/hdfs-site.xml dest=/usr/local/hadoop/conf/hdfs-site.xml owner=hduser group=hadoop
+
+

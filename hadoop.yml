@@ -2,11 +2,10 @@
 - hosts: all
   user: root
   vars:
-     authorized_keys: "/root/.ssh/id_rsa.pub"
-     master_ip: "83.212.114.84"
+    hostip: ${ansible_eth0.ipv4.address}
+    is_master: "'$hostip' == '$master_ip'"
 
-  tasks:
-  - name: Set Ansible Key
+  - name: set ansible key
     action: authorized_key user=root key="$HOME/.ssh/id_rsa.pub" state=present
 
   - name: install jdk 1.6
@@ -43,8 +42,11 @@
 
   - name: chown hadoop-src from root to hadoop group
     tags: chown
-    action: command mv hadoop-1.0.4 hadoop chdir=/usr/local
-    action: command chown -R hduser:hadoop hadoop chdir=/usr/local
+    action: |
+      command /bin/sh -c '
+      cd /usr/local
+      mv hadoop-1.0.4 hadoop
+      chown -R hduser:hadoop hadoop'
 
   - name: update hadoop-env.sh file
     tags: env-sh
@@ -58,23 +60,5 @@
       chown hduser:hadoop /app/hadoop/tmp
       chmod 750 /app/hadoop/tmp'
 
-  - name: copy core-site.xml to /usr/local/hadoop/conf directory
-    tags: copyxml0
-    action: copy src=/root/hadoop/conf/core-site-template.xml dest=/usr/local/hadoop/conf/core-site.xml owner=hduser group=hadoop
-
-  - name: modify core-site.xml to replace master ip
-    tags: modifyxml0
-    action: lineinfile dest=/usr/local/hadoop/conf/core-site.xml state=present regexp="MASTER_IP" line="  <value>hdfs://{{ master_ip }}:54310</value>"
-
-  - name: copy mapred-site.xml to /usr/local/hadoop/conf directory
-    tags: copyxml1
-    action: copy src=/root/hadoop/conf/mapred-site-template.xml dest=/usr/local/hadoop/conf/mapred-site.xml owner=hduser group=hadoop
-
-  - name: modify mapred-site.xml to replace master ip
-    tags: modifyxml1
-    action: lineinfile dest=/usr/local/hadoop/conf/mapred-site.xml state=present regexp="MASTER_IP" line="  <value>{{ master_ip }}:54311</value>"
-
-  - name: copy hdfs-site.xml (with terasort-specific values) to /usr/local/hadoop/conf directory
-    tags: copyxml2
-    action: copy src=/root/hadoop/conf/hdfs-site.xml dest=/usr/local/hadoop/conf/hdfs-site.xml owner=hduser group=hadoop
-
+  - include: conf-files.yml
+  - include: format-hdfs.yml
