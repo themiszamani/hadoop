@@ -4,6 +4,7 @@
   vars:
     hostip: ${ansible_eth0.ipv4.address}
     is_master: "'$hostip' == '$master_ip'"
+    is_slave:  "not '$hostip' == '$master_ip'"
 
   tasks:
   - name: install jdk 1.6
@@ -21,6 +22,23 @@
   - name: copy authorized_keys to hduser .ssh directory
     tags: copyauth
     action: copy src=/root/.ssh/id_rsa.pub dest=~hduser/.ssh/authorized_keys owner=hduser group=hadoop mode=0600
+
+  - name: prepare ssh 
+    tags: preparessh
+    action: |
+      command /bin/sh -c '
+      sudo -u hduser ssh-keygen -q -t rsa -P "" -f /home/hduser/.ssh/id_rsa
+      sudo -u hduser cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
+
+  - name: copy master public ssh key to local box
+    tags: copymasterssh
+    local_action: command  scp -v -o StrictHostKeyChecking=no root@$master_ip:/home/hduser/.ssh/id_rsa.pub master_id_rsa_pub
+    only_if: "$is_master"
+
+  - name: copy local box master ssh key to hduser
+    tags: slavessh
+    authorized_key: user=hduser key="{{ lookup('file', 'master_id_rsa_pub') }}"
+    only_if: "$is_slave"
 
   - name: disable IPV6
     tags: ipv6
