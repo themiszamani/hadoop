@@ -5,9 +5,7 @@
     hostip: ${ansible_eth0.ipv4.address}
     is_master: "'$hostip' == '$master_ip'"
 
-  - name: set ansible key
-    action: authorized_key user=root key="$HOME/.ssh/id_rsa.pub" state=present
-
+  tasks:
   - name: install jdk 1.6
     action: apt name=openjdk-6-jdk state=latest install_recommends=no 
 
