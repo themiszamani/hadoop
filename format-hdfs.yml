@@ -1,4 +1,4 @@
   - name: format HDFS namenode
     tags: format
-    action: command /usr/local/hadoop/bin/hadoop namenode -format chdir=/usr/local/hadoop
+    action: command sudo -u hduser /usr/local/hadoop/bin/hadoop namenode -format chdir=/usr/local/hadoop
     only_if: "$is_master"
