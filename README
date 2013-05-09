@@ -1,2 +1,8 @@
 Code to create hadoop clusters through kamaki API
 
+Prerequisites:
+1. On each machine python and python-apt should be pre-installed
+2. On absible server two files have to be created beforehand: 
+   2.1 hosts ([master] and [slaves] groups)
+   2.2 conf/slaves with the IP addresses of hadoop slaves
+
