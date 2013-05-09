@@ -19,4 +19,14 @@
     tags: copyxml2
     action: copy src=/root/hadoop/conf/hdfs-site.xml dest=/usr/local/hadoop/conf/hdfs-site.xml owner=hduser group=hadoop
 
+  - name: create masters file
+    tags: masters
+    action: lineinfile dest=/usr/local/hadoop/conf/masters state=present regexp="localhost" line="{{ master_ip }}"
+    only_if: "$is_master"
+
+  - name: create slaves file
+    tags: slaves
+    action: copy src=/root/hadoop/conf/slaves dest=/usr/local/hadoop/conf/slaves owner=hduser group=hadoop
+    only_if: "$is_master"
+
 
