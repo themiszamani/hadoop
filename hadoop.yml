@@ -32,6 +32,7 @@
       command /bin/sh -c '
       sudo -u hduser ssh-keygen -q -t rsa -P "" -f /home/hduser/.ssh/id_rsa
       sudo -u hduser cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
+    only_if: "$is_master"
 
   - name: copy master public ssh key to local box
     tags: copymasterssh
