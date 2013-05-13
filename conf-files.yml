@@ -1,27 +1,19 @@
 ---
   - name: copy core-site.xml to /usr/local/hadoop/conf directory
-    tags: copyxml0
-    action: copy src=/root/hadoop/conf/core-site-template.xml dest=/usr/local/hadoop/conf/core-site.xml owner=hduser group=hadoop
-
-  - name: modify core-site.xml to replace master ip
-    tags: modifyxml0
-    action: lineinfile dest=/usr/local/hadoop/conf/core-site.xml state=present regexp="MASTER_IP" line="  <value>hdfs://{{ master_ip }}:54310</value>"
+    tags: coresite
+    action: template src=/root/hadoop/conf/core-site.j2 dest=/usr/local/hadoop/conf/core-site.xml
 
   - name: copy mapred-site.xml to /usr/local/hadoop/conf directory
-    tags: copyxml1
-    action: copy src=/root/hadoop/conf/mapred-site-template.xml dest=/usr/local/hadoop/conf/mapred-site.xml owner=hduser group=hadoop
-
-  - name: modify mapred-site.xml to replace master ip
-    tags: modifyxml1
-    action: lineinfile dest=/usr/local/hadoop/conf/mapred-site.xml state=present regexp="MASTER_IP" line="  <value>{{ master_ip }}:54311</value>"
+    tags: mapredsite
+    action: template src=/root/hadoop/conf/mapred-site.j2 dest=/usr/local/hadoop/conf/mapred-site.xml
 
   - name: copy hdfs-site.xml (with terasort-specific values) to /usr/local/hadoop/conf directory
-    tags: copyxml2
-    action: copy src=/root/hadoop/conf/hdfs-site.xml dest=/usr/local/hadoop/conf/hdfs-site.xml owner=hduser group=hadoop
+    tags: hdfssite
+    action: template src=/root/hadoop/conf/hdfs-site.j2 dest=/usr/local/hadoop/conf/hdfs-site.xml
 
   - name: create masters file
     tags: masters
-    action: lineinfile dest=/usr/local/hadoop/conf/masters state=present regexp="localhost" line="{{ master_ip }}"
+    action: template src=/root/hadoop/conf/masters.j2 dest=/usr/local/hadoop/conf/masters
     only_if: "$is_master"
 
   - name: create slaves file

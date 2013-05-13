@@ -5,6 +5,7 @@
     hostip: ${ansible_eth0.ipv4.address}
     is_master: "'$hostip' == '$master_ip'"
     is_slave:  "not '$hostip' == '$master_ip'"
+    dfs_replication: 2
 
   tasks:
   - name: install jdk 1.6
