@@ -1,0 +1,19 @@
+---
+- hosts: master
+  user: hduser
+  vars:
+    downloadURL: http://www.eu.apache.org/dist/pig/stable/pig-0.11.1.tar.gz
+    srcFile: pig-0.11.1.tar.gz
+    installDir: /home/hduser/pig-0.11.1
+
+  tasks:
+  - name: download Apache Pig 
+    action: get_url dest=/home/hduser url=$downloadURL
+
+  - name: unzip Pig src
+    tags: unzip
+    action: command tar -xzf $srcFile chdir=/home/hduser
+
+  - name: update $PATH
+    tags: bashrc
+    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^fi$"  line="fi\nexport PATH=$PATH:/home/hduser/pig-0.11.1/bin"
