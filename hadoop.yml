@@ -51,7 +51,7 @@
 
   - name: update ~/.bashrc file
     tags: bashrc
-    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp=""  line="fi\nexport JAVA_HOME=/usr/lib/jvm/java-6-openjdk/\nexport HADOOP_HOME=/usr/local/hadoop\nexport HADOOP_OPTS=-Djava.net.preferIPv4Stack=true"
+    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp=""  line="fi\nexport JAVA_HOME=/usr/lib/jvm/java-6-openjdk/\nexport HADOOP_HOME=/usr/local/hadoop\nexport HADOOP_OPTS=-Djava.net.preferIPv4Stack=true\nexport PATH=$PATH:/usr/local/hadoop/bin"
 
   - name: download hadoop src
     tags: downlo
