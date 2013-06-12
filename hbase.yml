@@ -1,0 +1,47 @@
+---
+- hosts: master
+  user: root
+  vars:
+    downloadURL: http://www.eu.apache.org/dist/hbase/hbase-0.95.1/hbase-0.95.1-hadoop1-bin.tar.gz
+    srcFile: hbase-0.95.1-hadoop1-bin.tar.gz
+    installDir: /usr/local/hbase-0.95.1-hadoop1
+
+  tasks:
+  - name: download Apache HBase 
+    action: get_url dest=/usr/local url=$downloadURL
+
+  - name: unzip HBase src
+    tags: unzip
+    action: command tar -xzf $srcFile chdir=/usr/local
+
+  - name: chown hbase from root to hadoop group
+    tags: chown
+    action: |
+      command /bin/sh -c '
+      cd /usr/local
+      chown -R hduser:hadoop hbase-0.95.1-hadoop1'
+
+  - name: copy lib/hadoop-jar (TBD)
+    tags: copyjar
+    action: command sudo -u hduser cp /usr/local/hadoop/hadoop-core*jar /usr/local/hbase-0.95.1-hadoop1/lib
+ 
+  - name: copy hdfs-site.xml (TBD)
+    tags: copyhdfs
+    action: command sudo -u hduser cp /usr/local/hadoop/conf/hdfs-site.xml /usr/local/hbase-0.95.1-hadoop1/conf
+
+  - name: update hdfs-env.sh (1)
+    tags: updenv1
+    action: lineinfile dest=/usr/local/hbase-0.95.1-hadoop10/conf/hbase-env.sh regexp=^# export JAVA_HOME state=present line=export JAVA_HOME=/usr/lib/jvm/java-6-openjdk/
+
+  - name: update hdfs-env.sh (2)
+    tags: updenv2
+    action: lineinfile dest=/usr/local/hbase-0.95.1-hadoop10/conf/hbase-env.sh regexp=^# export HBASE_MANAGES_ZK=true state=present line=export HBASE_MANAGES_ZK=true
+
+  - name: update hbase-site.xml
+    tags: coresite
+    action: template src=/root/hadoop/hbase/hbase-site.j2 dest=/usr/local/hbase-0.95.1-hadoop1/conf/hbase-site.xml
+
+  - name: create regionservers
+  - tags: regionservers
+    action: copy src=/root/hadoop/conf/slaves dest=/usr/local/hbase-0.95.1-hadoop1/conf/ owner=hduser group=hadoop
+
