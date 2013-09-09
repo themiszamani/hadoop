@@ -12,8 +12,8 @@ Prerequisites:
 command> ansible playbook file hadoop.yml --extra_vars "master_ip=<ip>"
 
 to add a new worker node:
-command> ansible playbook file hadoop.yml --extra_vars "master_ip=<ip>" -l slaves
-command> ansible playbook file hadoop.yml --extra_vars "master_ip=<ip>" -l master -t slaves
+command> ansible-playbook hadoop.yml -i hosts --extra_vars "master_ip=<ip>" -l slaves
+command> ansible-playbook hadoop.yml -i hosts --extra_vars "master_ip=<ip>" -l master -t slaves
 
 4. before initializing hdfs and starting the cluster
    for each slave node run 
