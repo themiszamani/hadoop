@@ -1,21 +1,13 @@
-Python and ansible scripts to create hadoop clusters through kamaki API
+Python and Ansible scripts to create hadoop clusters through kamaki API
 OS for Ansible server & hadoop nodes: Debian 6.0.7
 
 Prerequisites:
-1. Install ansible (ansible server)
-2. On each hadoop machine: configure root ssh access and 
-   command> apt-get update; apt-get -y install python python-apt
-3. On absible server the following files have to be created beforehand: 
-   * hosts ([master] and [slaves] groups)
-   * conf/slaves with the IP addresses of hadoop slaves
+Install Ansible (ansible server) on the machine you want to run the ansible commands (NOT the Hadoop master)
 
-command> ansible playbook file hadoop.yml --extra_vars "master_ip=<ip>"
+command> python hadoop_cluster.py [options]
+see: python hadoop_cluster.py -h
 
-to add a new worker node:
-command> ansible-playbook hadoop.yml -i hosts --extra_vars "master_ip=<ip>" -l slaves
-command> ansible-playbook hadoop.yml -i hosts --extra_vars "master_ip=<ip>" -l master -t slaves
+to add new worker node(s):
+command> python hadoop_cluster.py [options] --extend
 
-4. before initializing hdfs and starting the cluster
-   for each slave node run 
-   command> ssh-keyscan -H <slave-ip> >> ~/.ssh/known_hosts
-   in the master node
+NOTE: You have to manually format the namenode and start the Hadoop cluster

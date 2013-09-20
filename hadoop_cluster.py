@@ -374,7 +374,7 @@ def main():
         slave_ip_list = []
         for i in xrange(1, cnt):
             slave_ip_list.append(cluster[i][1]) 
-        enable_ssh_login(cluster[0][1], [cluster[0][01])
+        enable_ssh_login(cluster[0][1], [cluster[0][1]])
         enable_ssh_login(cluster[0][1], slave_ip_list)
     else:
         hosts_latest = open(opts.hadoop_dir+'/hosts.latest', 'w')
