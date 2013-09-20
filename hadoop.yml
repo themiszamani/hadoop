@@ -55,18 +55,18 @@
 
   - name: download hadoop src
     tags: downlo
-    action: get_url dest=/usr/local url=http://apache.tsl.gr/hadoop/core/stable/hadoop-1.1.2.tar.gz
+    action: get_url dest=/usr/local url=http://apache.cc.uoc.gr/hadoop/common/stable/hadoop-1.2.1.tar.gz
 
   - name: unzip hadoop src
     tags: unzip
-    action: command tar -xzf hadoop-1.1.2.tar.gz chdir=/usr/local
+    action: command tar -xzf hadoop-1.2.1.tar.gz chdir=/usr/local
 
   - name: chown hadoop-src from root to hadoop group
     tags: chown
     action: |
       command /bin/sh -c '
       cd /usr/local
-      mv hadoop-1.1.2 hadoop
+      mv hadoop-1.2.1 hadoop
       chown -R hduser:hadoop hadoop'
 
   - name: update hadoop-env.sh file
@@ -82,4 +82,4 @@
       chmod 750 /app/hadoop/tmp'
 
   - include: conf-files.yml
-  - include: format-hdfs.yml
+#  - include: format-hdfs.yml

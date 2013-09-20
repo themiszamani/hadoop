@@ -17,15 +17,14 @@ import subprocess
 from base64 import b64encode
 from datetime import datetime
 
-from kamaki.config import Config
+from kamaki.clients.astakos import AstakosClient
 from kamaki.clients.compute import ComputeClient
 from kamaki.clients.cyclades import CycladesClient
 
-config = Config()
 DEFAULT_PREFIX = "hadoop"
-DEFAULT_CYCLADES = config.get("compute", "url")
-DEFAULT_TOKEN = (config.get("compute", "token") or
-                 config.get("global", "token"))
+DEFAULT_FLAVOR_ID, DEFAULT_IMAGE_ID = 13, '71ff6db1-f439-47c9-918f-32fc4f762efd'
+DEFAULT_AUTHENTICATION_URL = 'https://accounts.okeanos.grnet.gr/identity/v2.0/'
+
 # These should be converted to command-line options
 # ACHTUNG: The script WILL upload DEFAULT_SSH_KEY into newly created instances
 DEFAULT_SSH_KEY = os.path.expanduser(os.path.join("~", ".ssh", "id_rsa_hadoop"))
@@ -72,12 +71,12 @@ def parse_arguments(args):
     parser.add_option("--cyclades",
                       action="store", type="string", dest="cyclades",
                       help=("The API URI to use to reach the Cyclades API " \
-                            "(default: %s)" % DEFAULT_CYCLADES),
-                      default=DEFAULT_CYCLADES)
+                            "(default: %s)" % DEFAULT_AUTHENTICATION_URL),
+                      default=DEFAULT_AUTHENTICATION_URL)
     parser.add_option("--token",
                       action="store", type="string", dest="token",
                       help="The token to use for authentication to the API",
-                      default=DEFAULT_TOKEN)
+                      default=None)
     parser.add_option("--flavor-id",
                       action="store", type="int", dest="flavorid",
                       metavar="FLAVOR ID",
@@ -112,6 +111,11 @@ def parse_arguments(args):
     if not opts.show_stale:
         if opts.imageid is None:
             print >>sys.stderr, "The --image-id argument is mandatory."
+            parser.print_help()
+            sys.exit(1)
+
+        if opts.token is None:
+            print >>sys.stderr, "The --token argument is mandatory."
             parser.print_help()
             sys.exit(1)
 
@@ -167,45 +171,17 @@ def cmd_execute(cmd):
 def create_machine(opts, c, i):
     """ Create the i-th Hadoop node (vm) """
     servername = "%s-%d" % (opts.prefix, i)
-    if i>0: # worker
-        # copy ssh key to both root and hduser accounts
-        personality = [{"path": "/home/hduser/.ssh/authorized_keys",
-                        "owner": "hduser", "group": "hadoop",
-                        "mode": 0600,
-                        "contents": b64encode(open(opts.hadoop_dir+"/master_id_rsa_pub").read())},
-                       {"path": "/home/hduser/.ssh/config",
-                        "owner": "hduser", "group": "hadoop",
-                        "mode": 0600,
-                        "contents": b64encode("StrictHostKeyChecking no")},
-	   	       {"path": "/root/.ssh/authorized_keys",
-                        "owner": "root", "group": "root",
-                        "mode": 0600,
-                        "contents": b64encode(open(DEFAULT_SSH_PUB).read())},
-                       {"path": "/root/.ssh/config",
-                        "owner": "root", "group": "root",
-                        "mode": 0600,
-                        "contents": b64encode("StrictHostKeyChecking no")}]
-    else: # master
-        personality = [{"path": "/home/hduser/.ssh/authorized_keys",
-                        "owner": "hduser", "group": "hadoop",
-                        "mode": 0600,
-                        "contents": b64encode(open(DEFAULT_SSH_PUB).read())},
-                       {"path": "/home/hduser/.ssh/config",
-                        "owner": "hduser", "group": "hadoop",
-                        "mode": 0600,
-                        "contents": b64encode("StrictHostKeyChecking no")},
-                       {"path": "/root/.ssh/authorized_keys",
-                        "owner": "root", "group": "root",
-                        "mode": 0600,
-                        "contents": b64encode(open(DEFAULT_SSH_PUB).read())},
-                       {"path": "/root/.ssh/config",
-                        "owner": "root", "group": "root",
-                        "mode": 0600,
-                        "contents": b64encode("StrictHostKeyChecking no")}]
+    personality = [{"path": "/root/.ssh/authorized_keys",
+                    "owner": "root", "group": "root",
+                    "mode": 0600,
+                    "contents": b64encode(open(DEFAULT_SSH_PUB).read())},
+                   {"path": "/root/.ssh/config",
+                    "owner": "root", "group": "root",
+                    "mode": 0600,
+                    "contents": b64encode("StrictHostKeyChecking no")}]
 
     log.info("\nCreating node %s", servername)
-    server = c.create_server(servername, opts.flavorid,
-                             opts.imageid,
+    server = c.create_server(servername, opts.flavorid, opts.imageid,
                              personality=personality)
 
     # Wait until server is up and running
@@ -223,20 +199,21 @@ def create_machine(opts, c, i):
 
         active = [s for s in cluster if s["status"] == "ACTIVE"]
         build = [s for s in cluster if s["status"] == "BUILD"]
-        error = [s for s in cluster if s["status"] not in ("ACTIVE", "BUILD")]
+        error = [s for s in cluster if s["status"] not in ("ACTIVE", "BUILD", "STOPPED")]
         if error:
             log.fatal("Server failed.")
 	    print "error = ", error
             return {}
         for n in cluster:
             if n["name"] == servername: progress = n["progress"]
-        print '\rBuilding vm, %s%% progress' % str(progress),
+        print '\rBuilding vm: %s%% progress' % str(progress),
         sys.stdout.flush()
         if len(build) == 0:
             break
         time.sleep(2)
 
     time.sleep(5)
+    print
     # Find machine's ip
     ip = ''
     adminPass = ''
@@ -245,10 +222,8 @@ def create_machine(opts, c, i):
         if item["name"] == servername:
             adminPass = server['adminPass']
             if "attachments" in item:
-                log.info("item=%s", item)
-                if "values" in item["attachments"]:
-                    if "ipv4" in item["attachments"]["values"][0]:
-                        ip = item["attachments"]["values"][0]["ipv4"]
+                if "ipv4" in item["attachments"][0]:
+                    ip = item["attachments"][0]["ipv4"]
     if ip=='':
         log.info("Error locating server ip. Execution aborted.")
         return {}
@@ -262,65 +237,44 @@ def create_machine(opts, c, i):
         time.sleep(16)
     retval = cmd_execute(cmd)
 
-    # Perform a short delay, before running rcp to get the hostname
-    log.info("Delay...")
-    time.sleep(10)
+    # Install necessary software for ansible
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no root@%s:/etc/hostname %s/hostname_%d" % (ip, opts.hadoop_dir, i))
-        retval = cmd_execute(cmd)
+        ssh.connect(ip, username = 'root')
+        log.info("ssh as root@%s succeeded.", ip)
+        ssh_cmd = 'apt-get update; apt-get -y install python python-apt'
+        log.info("Executing: %s", ssh_cmd)
+        stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
+        time.sleep(2)
+        output = stdout.readlines()
+        ssh.close()
     except:
-        log.info("SSH error in getting hostname. Execution aborted.")
+        log.info("SSH error. Execution aborted.")
+        print "root password: " + adminPass
         return {}
 
-    if i==0: # master
-        log.info("Preparing master key...")
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        try:
-            ssh.connect(ip, username = 'root')
-            log.info("ssh as root@%s succeeded.", ip)
-	    ssh_cmd = 'echo \"hduser:hduser123\" | chpasswd'
-            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
-            time.sleep(2)
-            output = stdout.readlines()
-            shh.close()
-            log.info("chpasswd succeeded.")
-            time.sleep(1)
-            ssh.connect(ip, username = 'hduser', password = "hduser123")
-	    ssh_cmd = 'ssh-keygen -q -t rsa -P \"\" -f /home/hduser/.ssh/id_rsa'
-            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
-            time.sleep(2)
-            output = stdout.readlines()
-            ssh_cmd = 'cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
-            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
-            time.sleep(2)
-            output = stdout.readlines()
-            cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no root@%s:/home/hduser/.ssh/id_rsa.pub %s/master_id_rsa_pub" % (ip, opts.hadoop_dir))
-            retval = cmd_execute(cmd)
-        except:
-            log.info("SSH error. Execution aborted.")
-	    print "root password: " + adminPass
-            return {}
-        ssh.close()
-    else: # worker
-        log.info("(Clearing HDFS)")
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        try:
-            time.sleep(2)
-            ssh.connect(ip, username = 'root')
-            #ssh_cmd = 'apt-get update; apt-get -y install openjdk-6-jdk' # ;rm -rf /app/hadoop/tmp/dfs/data/'
-            ssh_cmd = 'rm -rf /app/hadoop/tmp/dfs/data/'
-            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
-            output = stdout.readlines()
-        except:
-            log.info("SSH error. Execution aborted.")
-            return {}
-        ssh.close()    
     # CHECK!
     return server
 
+def enable_ssh_login(master_ip, slave_ip_list):
+    """Enable passwordless ssh login from master to slaves"""
+
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        ssh.connect(master_ip, username = 'root')
+        log.info("Logged in.")
+        for slave_ip in slave_ip_list:
+            ssh_cmd = "su - hduser -c \""+"ssh-keyscan -H "+slave_ip+ " >> ~/.ssh/known_hosts\""
+            log.info("Executing: %s", ssh_cmd)
+            stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
+            time.sleep(2)
+            output = stdout.readlines()
+        ssh.close()
+    except:
+        log.info("SSH error.")
+        return 
 
 def main():
     """Parse arguments, use kamaki to create cluster, setup using ssh"""
@@ -329,7 +283,7 @@ def main():
 
     global CYCLADES, TOKEN
 
-    CYCLADES = opts.cyclades
+    AUTHENTICATION_URL = opts.cyclades
     TOKEN = opts.token
 
     # Cleanup stale servers from previous runs
@@ -338,7 +292,10 @@ def main():
         return 0
 
     # Initialize a kamaki instance
-    c = CycladesClient(CYCLADES, TOKEN)
+    user = AstakosClient(AUTHENTICATION_URL, TOKEN)
+    cyclades_endpoints = user.get_service_endpoints('compute')
+    CYCLADES_URL = cyclades_endpoints['publicURL']
+    c = CycladesClient(CYCLADES_URL, TOKEN)
 
     # Spawn a cluster of 'cnt' servers
     cnt = int(opts.clustersize)
@@ -384,80 +341,59 @@ def main():
 
     adminPass_f.close()
 
-    # Read all the hostname files to get the hostname strings and store them in a vector
-    for i in xrange(0, initialClusterSize+cnt):
-        hname_f = open('%s/hostname_%d' % (opts.hadoop_dir, i), 'r')
-        hostnames.append(hname_f.readline())
-        hostnames[i] = hostnames[i][:-1]
-        hname_f.close()
-    
     # Setup Hadoop files and settings on all cluster nodes
-    # Create the 'cluster' dictionary out of servers, with only Hadoop-relevant keys
+    # Create the 'cluster' dictionary out of servers, with only Hadoop-relevant keys (name, ip, integer key)
     servers = c.list_servers(detail=True)
-    cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
-    cluster = [(s["name"], s["attachments"]["values"][0]["ipv4"], int(s["name"][s["name"].find('-')+1:]), hostnames[int(s["name"][s["name"].find('-')+1:])]) for s in cluster]
+    cluster = [s for s in c.list_servers(detail=True) if s["name"].startswith(opts.prefix)]
+    cluster = [(s["name"], s["attachments"][0]["ipv4"], int(s["name"][s["name"].find('-')+1:])) for s in cluster]
     cluster = sorted(cluster, key=lambda cluster: cluster[2])
 
-    etc_hosts_f = open("/etc/hosts", "r")
-    etc_hosts = etc_hosts_f.readlines()
-    etc_hosts_f.close()
-
-    hadoop_ip_list = ""
+    # Prepare Ansible-Hadoop config files (hosts, conf/slaves)
+    hosts = open(opts.hadoop_dir+'/hosts', 'w')
+    hosts.write('[master]\n')
     for i in xrange(0, initialClusterSize+cnt):
         for s in cluster:
             if s[0] == opts.prefix+"-"+str(i):
-                hadoop_ip_list = hadoop_ip_list + "".join("%s\t%s %s\n" % (s[1], s[0], hostnames[i]))
-
-    # prepare Hadoop config files (mapred, core, masters, slaves)
-    template = open(opts.hadoop_dir+'/mapred-site-template.xml', 'r')
-    mapred = open(opts.hadoop_dir+'/conf/mapred-site.xml', 'w')
-    for line in template.readlines():
-        line = line.replace("MASTER_IP",masterName).strip()
-        mapred.write(line+'\n')
-    template.close()
-    mapred.close()
-
-    template = open(opts.hadoop_dir+'/core-site-template.xml', 'r')
-    core = open(opts.hadoop_dir+'/conf/core-site.xml', 'w')
-    for line in template.readlines():
-        line = line.replace("MASTER_IP",masterName).strip()
-        core.write(line+'\n')
-    template.close()
-    core.close()
-
-    masters = open(opts.hadoop_dir+'/conf/masters', 'w')
-    masters.write(masterName+'\n')
-    masters.close()
+                if s[0] == masterName:
+                    hosts.write(s[1]+'\n\n'+'[slaves]\n')
+                else:
+                    hosts.write(s[1]+'\n')
+    hosts.close()
 
     slaves = open(opts.hadoop_dir+'/conf/slaves', 'w')
-    i=0
-    for s in cluster:
-        slaves.write(opts.prefix+"-"+str(i)+'\n')
-        i=i+1
+    for s in cluster[1:]:
+        slaves.write(s[1]+'\n')
     slaves.close()
 
-    i = 0 # start from 0-th node (master)
-    for s in cluster:
-        log.info("Injecting files to node %d/%d (%s, %s)" % (i+1, len(cluster), s[1], s[3]))
-
-        # Create i-th hosts file from /etc/hosts + hostnames
-        hosts = open(opts.hadoop_dir+'/hosts_'+str(i), 'w')
-        hosts.write("127.0.0.1\tlocalhost\n")
-        hosts.write("".join("127.0.1.1\t%s\n" % (s[3])))
-        hosts.write(hadoop_ip_list)
-        for line in etc_hosts[-7:]:
-           hosts.write(line)
-        hosts.close()
-
-        time.sleep(1)
-
-        cmd = "".join("rcp -o ServerAliveInterval=120 -o StrictHostKeyChecking=no %s/hosts_%d root@%s:/etc/hosts" % (opts.hadoop_dir, i, s[1]))
+    # Execute respective ansible playbook
+    if (opts.extend==False):
+        cmd = "ansible-playbook hadoop.yml -i hosts -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l master"
         retval = cmd_execute(cmd)
+        cmd = "ansible-playbook hadoop.yml -i hosts -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l slaves"
+        retval = cmd_execute(cmd) 
+        slave_ip_list = []
+        for i in xrange(1, cnt):
+            slave_ip_list.append(cluster[i][1]) 
+        enable_ssh_login(cluster[0][1], [cluster[0][01])
+        enable_ssh_login(cluster[0][1], slave_ip_list)
+    else:
+        hosts_latest = open(opts.hadoop_dir+'/hosts.latest', 'w')
+        hosts_latest.write('[master]\n')
+        hosts_latest.write(cluster[0][1]+'\n\n'+'[slaves]\n')
+        for i in xrange(initialClusterSize, initialClusterSize+cnt):
+            hosts_latest.write(cluster[i][1]+'\n')
+        hosts_latest.close()
+        cmd = "ansible-playbook hadoop.yml -i hosts.latest -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l slaves"
+        retval = cmd_execute(cmd) 
+        slave_ip_list = []
+        for i in xrange(initialClusterSize, initialClusterSize+cnt):
+            slave_ip_list.append(cluster[i][1]) 
+        enable_ssh_login(cluster[0][1], slave_ip_list)
 
-        cmd = "".join("rcp -o StrictHostKeyChecking=no %s/conf/* root@%s:/usr/local/hadoop/conf" % (opts.hadoop_dir, s[1]))
-        retval = cmd_execute(cmd)
+    # Update conf/slaves in master
+    cmd = "ansible-playbook hadoop.yml -i hosts -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l master -t slaves"
+    retval = cmd_execute(cmd)
 
-        i = i+1
     log.info("Done.")
 
 if __name__ == "__main__":
