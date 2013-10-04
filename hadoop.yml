@@ -8,8 +8,8 @@
     dfs_replication: 2
 
   tasks:
-  - name: install jdk 1.6
-    action: apt name=openjdk-6-jdk state=latest install_recommends=no 
+  - name: install jdk 1.7
+    action: apt name=openjdk-7-jdk state=latest install_recommends=no 
 
   - name: install sudo
     action: apt name=sudo state=latest install_recommends=no 
@@ -51,7 +51,7 @@
 
   - name: update ~/.bashrc file
     tags: bashrc
-    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp=""  line="fi\nexport JAVA_HOME=/usr/lib/jvm/java-6-openjdk/\nexport HADOOP_HOME=/usr/local/hadoop\nexport HADOOP_OPTS=-Djava.net.preferIPv4Stack=true\nexport PATH=$PATH:/usr/local/hadoop/bin"
+    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp=""  line="fi\nexport JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64/\nexport HADOOP_HOME=/usr/local/hadoop\nexport HADOOP_OPTS=-Djava.net.preferIPv4Stack=true\nexport PATH=$PATH:/usr/local/hadoop/bin"
 
   - name: download hadoop src
     tags: downlo
@@ -71,7 +71,7 @@
 
   - name: update hadoop-env.sh file
     tags: env-sh
-    action: lineinfile dest=/usr/local/hadoop/conf/hadoop-env.sh state=present insertafter=EOF regexp="^\# export JAVA_HOME=" line="export JAVA_HOME=/usr/lib/jvm/java-6-openjdk"
+    action: lineinfile dest=/usr/local/hadoop/conf/hadoop-env.sh state=present insertafter=EOF regexp="^\# export JAVA_HOME=" line="export JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64"
 
   - name: create app/hadoop/tmp to store HDFS
     tags: tmp

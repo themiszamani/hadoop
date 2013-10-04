@@ -2,10 +2,10 @@ Python and Ansible scripts to create multi-node Hadoop clusters through kamaki A
 (Hadoop installation based on http://www.michael-noll.com/tutorials/running-hadoop-on-ubuntu-linux-multi-node-cluster/)
 
 OS for Ansible server: Debian 6
-OS for Hadoop nodes: Debian 6 or 7
+OS for Hadoop nodes: Debian 6 or 7, Ubuntu 13.04
 Ansible version: 1.2
 Kamaki vesion: 0.10rc2
-Java: 1.6 (1.7 requires 2 places in hadoop.yml: action: apt name=openjdk-7-jdk AND correct value for JAVA_HOME)
+Java: 1.7 (1.6 requires 2 edits in hadoop.yml: action: apt name=openjdk-6-jdk AND correct value for JAVA_HOME)
 
 Prerequisites:
 Install Ansible (ansible server) on the machine you want to run the ansible commands (NOT the Hadoop master)
