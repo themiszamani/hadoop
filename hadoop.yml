@@ -19,7 +19,7 @@
     action: group name=hadoop state=present
 
   - name: create hadoop user
-    action: user name=hduser group=hadoop ssh_key_file=/root/.ssh/id_rsa.pub
+    action: user name=hduser group=hadoop ssh_key_file=/root/.ssh/id_rsa.pub shell=/bin/bash
 
   - name: create hduser .ssh directory
     action: file path=~hduser/.ssh owner=hduser group=hadoop mode=0700 state=directory
