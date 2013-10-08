@@ -6,6 +6,7 @@
     is_master: "'$hostip' == '$master_ip'"
     is_slave:  "not '$hostip' == '$master_ip'"
     dfs_replication: 2
+    hadoop_version: hadoop-1.2.1
 
   tasks:
   - name: install jdk 1.7
@@ -55,18 +56,18 @@
 
   - name: download hadoop src
     tags: downlo
-    action: get_url dest=/usr/local url=http://apache.cc.uoc.gr/hadoop/common/stable/hadoop-1.2.1.tar.gz
+    action: get_url dest=/usr/local url=http://apache.cc.uoc.gr/hadoop/common/stable/{{ hadoop_version }}.tar.gz
 
   - name: unzip hadoop src
     tags: unzip
-    action: command tar -xzf hadoop-1.2.1.tar.gz chdir=/usr/local
+    action: command tar -xzf {{ hadoop_version }}.tar.gz chdir=/usr/local
 
   - name: chown hadoop-src from root to hadoop group
     tags: chown
     action: |
       command /bin/sh -c '
       cd /usr/local
-      mv hadoop-1.2.1 hadoop
+      mv {{ hadoop_version }} hadoop
       chown -R hduser:hadoop hadoop'
 
   - name: update hadoop-env.sh file
