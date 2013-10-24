@@ -201,7 +201,7 @@ def create_machine(opts, c, i):
         build = [s for s in cluster if s["status"] == "BUILD"]
         error = [s for s in cluster if s["status"] not in ("ACTIVE", "BUILD", "STOPPED")]
         if error:
-            log.fatal("Server failed.")
+            log.fatal("\nServer failed.")
 	    print "error = ", error
             return {}
         for n in cluster:
@@ -242,9 +242,8 @@ def create_machine(opts, c, i):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
         ssh.connect(ip, username = 'root')
-        log.info("ssh as root@%s succeeded.", ip)
         ssh_cmd = 'apt-get update; apt-get -y install python python-apt'
-        log.info("Executing: %s", ssh_cmd)
+        log.info("ssh as root@%s succeeded. Executing: %s", ip, ssh_cmd)
         stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
         time.sleep(2)
         output = stdout.readlines()
@@ -253,6 +252,11 @@ def create_machine(opts, c, i):
         log.info("SSH error. Execution aborted.")
         print "root password: " + adminPass
         return {}
+
+    # enable ssh login
+    cmd = 'ssh-keyscan -H '+ ip + ' >> ~/.ssh/known_hosts'
+    print cmd
+    os.system(cmd)
 
     # CHECK!
     return server
@@ -368,9 +372,9 @@ def main():
     # Execute respective ansible playbook
     if (opts.extend==False):
         cmd = "ansible-playbook hadoop.yml -i hosts -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l master"
-        retval = cmd_execute(cmd)
+        retval = os.system(cmd)
         cmd = "ansible-playbook hadoop.yml -i hosts -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l slaves"
-        retval = cmd_execute(cmd) 
+        retval = os.system(cmd)
         slave_ip_list = []
         for i in xrange(1, cnt):
             slave_ip_list.append(cluster[i][1]) 
@@ -384,7 +388,7 @@ def main():
             hosts_latest.write(cluster[i][1]+'\n')
         hosts_latest.close()
         cmd = "ansible-playbook hadoop.yml -i hosts.latest -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l slaves"
-        retval = cmd_execute(cmd) 
+        retval = os.system(cmd) 
         slave_ip_list = []
         for i in xrange(initialClusterSize, initialClusterSize+cnt):
             slave_ip_list.append(cluster[i][1]) 
@@ -392,7 +396,7 @@ def main():
 
     # Update conf/slaves in master
     cmd = "ansible-playbook hadoop.yml -i hosts -vv --extra-vars \""+"master_ip="+cluster[0][1]+"\""+" -l master -t slaves"
-    retval = cmd_execute(cmd)
+    retval = os.system(cmd)
 
     log.info("Done.")
 
