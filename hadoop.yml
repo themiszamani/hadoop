@@ -34,17 +34,17 @@
       command /bin/sh -c '
       sudo -u hduser ssh-keygen -q -t rsa -P "" -f /home/hduser/.ssh/id_rsa
       sudo -u hduser cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
-    when: "$is_master"
+    only_if: "{{ is_master }}"
 
   - name: copy master public ssh key to local box
     tags: copymasterssh
     local_action: command  scp -v -o StrictHostKeyChecking=no root@$master_ip:/home/hduser/.ssh/id_rsa.pub master_id_rsa_pub
-    when: "$is_master"
+    only_if: "{{ is_master }}"
 
   - name: copy local box master ssh key to hduser
     tags: slavessh
     authorized_key: user=hduser key="{{ lookup('file', 'master_id_rsa_pub') }}"
-    when: "$is_slave"
+    only_if: "{{ is_slave }}"
 
   - name: disable IPV6
     tags: ipv6
@@ -56,7 +56,7 @@
 
   - name: download hadoop src
     tags: downlo
-    action: get_url dest=/usr/local url=http://apache.cc.uoc.gr/hadoop/common/stable/{{ hadoop_version }}.tar.gz
+    action: get_url dest=/usr/local url=http://apache.cc.uoc.gr/hadoop/common/{{ hadoop_version }}/{{ hadoop_version }}.tar.gz
 
   - name: unzip hadoop src
     tags: unzip
