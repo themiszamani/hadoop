@@ -14,7 +14,7 @@ import subprocess
 from base64 import b64encode
 from datetime import datetime
 
-from kamaki.config import Config
+from kamaki.clients.astakos import AstakosClient
 from kamaki.clients.compute import ComputeClient
 from kamaki.clients.cyclades import CycladesClient
 
@@ -141,8 +141,8 @@ def main():
 
     cnt = int(opts.end)
     servers = c.list_servers(detail=True)
-    cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
-    cluster = [(s["name"], s["attachments"]["values"][0]["ipv4"], int(s["name"][s["name"].find('-')+1:])) for s in cluster]
+    cluster = [s for s in c.list_servers(detail=True) if s["name"].startswith(opts.prefix)]
+    cluster = [(s["name"], s["attachments"][0]["ipv4"], int(s["name"][s["name"].find('-')+1:])) for s in cluster]
     cluster = sorted(cluster, key=lambda cluster: cluster[2])
     print "Cluster:", cluster
 
