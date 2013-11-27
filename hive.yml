@@ -2,21 +2,21 @@
 - hosts: master
   user: root
   vars:
-    downloadURL: http://www.eu.apache.org/dist/hive/stable/hive-0.10.0.tar.gz
-    srcFile: hive-0.10.0.tar.gz
-    installDir: /usr/local/
+    downloadURL: http://www.eu.apache.org/dist/hive
+    hive_version: hive-0.11.0
 
   tasks:
   - name: download Apache Hive 
-    action: get_url dest=$installDir url=$downloadURL
+    tags: download
+    action: get_url dest=/usr/local url={{ downloadURL }}/{{ hive_version }}/{{ hive_version }}.tar.gz
 
   - name: chown hive from root to hadoop group
     tags: chown
     action: |
       command /bin/sh -c '
       cd /usr/local
-      tar -xzf $srcFile
-      mv hive-0.10.0 hive
+      tar -xzf {{ hive_version }}.tar.gz
+      mv {{ hive_version }} hive
       chown -R hduser:hadoop hive'
 
   - name: copy hive-site.xml to /usr/local/hive/conf directory
@@ -25,4 +25,4 @@
 
   - name: update $PATH
     tags: bashrc
-    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^fi$" line="fi\nexport PATH=$PATH:/usr/local/hive/bin"
+    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^" line="export PATH=$PATH:/usr/local/hive/bin"
