@@ -3,8 +3,8 @@
   user: root
   vars:
     hostip: ${ansible_eth0.ipv4.address}
-    is_master: "'$hostip' == '$master_ip'"
-    is_slave:  "not '$hostip' == '$master_ip'"
+    is_master: "'{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}'"
+    is_slave:  "not '{{ ansible_all_ipv4_addresses[0] }}' == '$master_ip'"
     dfs_replication: 2
     hadoop_version: hadoop-1.2.1
 
@@ -34,17 +34,17 @@
       command /bin/sh -c '
       sudo -u hduser ssh-keygen -q -t rsa -P "" -f /home/hduser/.ssh/id_rsa
       sudo -u hduser cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
-    only_if: "{{ is_master }}"
+    when: "{{ is_master }}"
 
   - name: copy master public ssh key to local box
     tags: copymasterssh
     local_action: command  scp -v -o StrictHostKeyChecking=no root@$master_ip:/home/hduser/.ssh/id_rsa.pub master_id_rsa_pub
-    only_if: "{{ is_master }}"
+    when: "{{ is_master }}"
 
   - name: copy local box master ssh key to hduser
     tags: slavessh
     authorized_key: user=hduser key="{{ lookup('file', 'master_id_rsa_pub') }}"
-    only_if: "{{ is_slave }}"
+    when: "{{ is_slave }}"
 
   - name: disable IPV6
     tags: ipv6
@@ -53,6 +53,10 @@
   - name: update ~/.bashrc file
     tags: bashrc
     action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'bashrc.4') }}"
+
+  - name: update limits.conf file
+    tags: limits
+    action: lineinfile dest=/etc/security/limits.conf state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'limits.conf.1') }}"
 
   - name: download hadoop src
     tags: downlo

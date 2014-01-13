@@ -14,11 +14,11 @@
   - name: create masters file
     tags: masters
     action: template src=/root/hadoop/conf/masters.j2 dest=/usr/local/hadoop/conf/masters
-    only_if: "{{ is_master }}"
+    when: "{{ is_master }}"
 
   - name: create slaves file
     tags: slaves
     action: copy src=/root/hadoop/conf/slaves dest=/usr/local/hadoop/conf/slaves owner=hduser group=hadoop
-    only_if: "{{ is_master }}"
+    when: "{{ is_master }}"
 
 
