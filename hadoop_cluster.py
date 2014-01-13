@@ -14,12 +14,14 @@ import paramiko
 import sys
 import time
 import subprocess
+import json 
 from base64 import b64encode
 from datetime import datetime
 
 from kamaki.clients.astakos import AstakosClient
 from kamaki.clients.compute import ComputeClient
 from kamaki.clients.cyclades import CycladesClient
+from kamaki.clients.cyclades import CycladesNetworkClient 
 
 DEFAULT_PREFIX = "hadoop"
 DEFAULT_FLAVOR_ID, DEFAULT_IMAGE_ID = 13, '71ff6db1-f439-47c9-918f-32fc4f762efd'
@@ -157,7 +159,6 @@ def cleanup_servers(prefix=DEFAULT_PREFIX, delete_stale=False):
 
 def cmd_execute(cmd):
     """ Execute cmd through subprocess """
-    print cmd
     proc = subprocess.Popen(cmd, shell=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ret = proc.wait()
@@ -218,14 +219,15 @@ def create_machine(opts, c, i):
     ip = ''
     adminPass = ''
     servers = c.list_servers(detail=True)
-    for item in servers: 
+    for item in servers:
         if item["name"] == servername:
             adminPass = server['adminPass']
             if "attachments" in item:
-                if "ipv4" in item["attachments"][0]:
-                    ip = item["attachments"][0]["ipv4"]
+                if "ipv4" in item["attachments"][1]:
+                    ip = item["attachments"][1]["ipv4"]
     if ip=='':
         log.info("Error locating server ip. Execution aborted.")
+        log.info("Password:"+adminPass)
         return {}
 
     # Ping machine until it comes alive
@@ -255,7 +257,6 @@ def create_machine(opts, c, i):
 
     # enable ssh login
     cmd = 'ssh-keyscan -H '+ ip + ' >> ~/.ssh/known_hosts'
-    print cmd
     os.system(cmd)
 
     # CHECK!
@@ -280,6 +281,33 @@ def enable_ssh_login(master_ip, slave_ip_list):
         log.info("SSH error.")
         return 
 
+#function to parse the endpoints and get the publicURL of the selected service
+def parseAstakosEndpoints(decoded_response,itemToSearch):
+
+    json.dumps(decoded_response,sort_keys=True,indent=4, separators=(',', ': '))
+    jsonData = decoded_response["access"]['serviceCatalog']
+    for item in jsonData:
+        name = item.get("name")
+        endpoints=item.get("endpoints");
+        for details in endpoints:
+            PUBLIC_URL = details.get("publicURL")
+        if name == itemToSearch:
+            return PUBLIC_URL
+ 
+#function to parse the endpoints and get the publicURL of the selected service
+def parseNetwork(decoded_response,itemToSearch):
+	jsonData = decoded_response
+        for item in jsonData:
+                name = item.get("public")
+                networkId=item.get("id");
+		return networkId
+
+def checkAllQuotas(quotas, tocheck):
+	jsonData = quotas.get('system')
+	for item in jsonData:
+		ToCheckResult = jsonData.get(item).get("limit") -  jsonData.get(item).get("usage")
+		if item==tocheck:
+			return ToCheckResult 
 def main():
     """Parse arguments, use kamaki to create cluster, setup using ssh"""
 
@@ -296,10 +324,16 @@ def main():
         return 0
 
     # Initialize a kamaki instance
-    user = AstakosClient(AUTHENTICATION_URL, TOKEN)
-    cyclades_endpoints = user.get_service_endpoints('compute')
-    CYCLADES_URL = cyclades_endpoints['publicURL']
-    c = CycladesClient(CYCLADES_URL, TOKEN)
+    user = AstakosClient(TOKEN, AUTHENTICATION_URL)
+    my_accountData = user.authenticate()
+    endpoints = user.get_endpoints() 
+    cyclades_endpoints = user.get_endpoints('compute')
+    cyclades_base_url = parseAstakosEndpoints(endpoints,'cyclades_compute')
+    cyclades_network_base_url = parseAstakosEndpoints(endpoints,'cyclades_network')
+    my_cyclades_client = CycladesClient(cyclades_base_url, TOKEN)
+    my_compute_client = ComputeClient(cyclades_base_url, TOKEN)
+    my_network_client = CycladesNetworkClient(cyclades_network_base_url, TOKEN) 
+    #c = CycladesClient(CYCLADES_URL, TOKEN)
 
     # Spawn a cluster of 'cnt' servers
     cnt = int(opts.clustersize)
@@ -310,15 +344,22 @@ def main():
     pass_fname = opts.hadoop_dir+'/bak/adminPass'+str(datetime.now())[:19].replace(' ', '')
     adminPass_f = open(pass_fname, 'w')
 
+    myNetworks = my_network_client.list_networks();  
+    NetWork_free = parseNetwork(myNetworks,'public');
+    #print "The network id ", NetWork_free
+    myIp = my_network_client.create_floatingip(NetWork_free);  
+    LastIp = myIp.get("floating_ip_address")
+    #print LastIp 
+
     initialClusterSize = 0
     server = {}
     if opts.extend == False:
         # Create master node (0th node)
-        server = create_machine(opts, c, 0)
+        server = create_machine(opts, my_cyclades_client, 0)
         if server == {}:
             return
     else:
-        servers = c.list_servers(detail=True)
+        servers = my_cyclades_client.list_servers(detail=True)
         cluster = [s for s in servers if s["name"].startswith(opts.prefix)]
         initialClusterSize = len(cluster)
         if initialClusterSize==0:
@@ -335,7 +376,7 @@ def main():
         if opts.extend: startingOffset = initialClusterSize
         for i in xrange(startingOffset, initialClusterSize+cnt):
             server = {}
-            server = create_machine(opts, c, i)
+            server = create_machine(opts, my_cyclades_client, i)
             if server == {}:
                 return;
             nodes.append(server)
@@ -347,9 +388,9 @@ def main():
 
     # Setup Hadoop files and settings on all cluster nodes
     # Create the 'cluster' dictionary out of servers, with only Hadoop-relevant keys (name, ip, integer key)
-    servers = c.list_servers(detail=True)
-    cluster = [s for s in c.list_servers(detail=True) if s["name"].startswith(opts.prefix)]
-    cluster = [(s["name"], s["attachments"][0]["ipv4"], int(s["name"][s["name"].find('-')+1:])) for s in cluster]
+    servers = my_cyclades_client.list_servers(detail=True)
+    cluster = [s for s in my_cyclades_client.list_servers(detail=True) if s["name"].startswith(opts.prefix)]
+    cluster = [(s["name"], s["attachments"][1]["ipv4"], int(s["name"][s["name"].find('-')+1:])) for s in cluster]
     cluster = sorted(cluster, key=lambda cluster: cluster[2])
 
     # Prepare Ansible-Hadoop config files (hosts, conf/slaves)
