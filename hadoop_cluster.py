@@ -302,12 +302,6 @@ def parseNetwork(decoded_response,itemToSearch):
                 networkId=item.get("id");
 		return networkId
 
-def checkAllQuotas(quotas, tocheck):
-	jsonData = quotas.get('system')
-	for item in jsonData:
-		ToCheckResult = jsonData.get(item).get("limit") -  jsonData.get(item).get("usage")
-		if item==tocheck:
-			return ToCheckResult 
 def main():
     """Parse arguments, use kamaki to create cluster, setup using ssh"""
 
@@ -323,8 +317,8 @@ def main():
         cleanup_servers(prefix=opts.prefix, delete_stale=opts.delete_stale)
         return 0
 
-    # Initialize a kamaki instance
-    user = AstakosClient(TOKEN, AUTHENTICATION_URL)
+    # Initialize a kamaki instance, get endpoints
+    user = AstakosClient(AUTHENTICATION_URL, TOKEN)
     my_accountData = user.authenticate()
     endpoints = user.get_endpoints() 
     cyclades_endpoints = user.get_endpoints('compute')
@@ -333,10 +327,8 @@ def main():
     my_cyclades_client = CycladesClient(cyclades_base_url, TOKEN)
     my_compute_client = ComputeClient(cyclades_base_url, TOKEN)
     my_network_client = CycladesNetworkClient(cyclades_network_base_url, TOKEN) 
-    #c = CycladesClient(CYCLADES_URL, TOKEN)
 
-    # Spawn a cluster of 'cnt' servers
-    cnt = int(opts.clustersize)
+    cnt = int(opts.clustersize)	# calculate size of cluster into 'cnt'
     # Initialize
     nodes = []
     masterName = ''
@@ -346,10 +338,8 @@ def main():
 
     myNetworks = my_network_client.list_networks();  
     NetWork_free = parseNetwork(myNetworks,'public');
-    #print "The network id ", NetWork_free
     myIp = my_network_client.create_floatingip(NetWork_free);  
     LastIp = myIp.get("floating_ip_address")
-    #print LastIp 
 
     initialClusterSize = 0
     server = {}
