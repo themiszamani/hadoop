@@ -4,7 +4,7 @@
   vars:
     hostip: ${ansible_eth0.ipv4.address}
     is_master: "'{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}'"
-    is_slave:  "not '{{ ansible_all_ipv4_addresses[0] }}' == '$master_ip'"
+    is_slave:  "not '{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}"
     dfs_replication: 2
     hadoop_version: hadoop-1.2.1
 
@@ -34,17 +34,17 @@
       command /bin/sh -c '
       sudo -u hduser ssh-keygen -q -t rsa -P "" -f /home/hduser/.ssh/id_rsa
       sudo -u hduser cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
-    when: "{{ is_master }}"
+    when: is_master
 
   - name: copy master public ssh key to local box
     tags: copymasterssh
     local_action: command  scp -v -o StrictHostKeyChecking=no root@$master_ip:/home/hduser/.ssh/id_rsa.pub master_id_rsa_pub
-    when: "{{ is_master }}"
+    when: is_master
 
   - name: copy local box master ssh key to hduser
     tags: slavessh
     authorized_key: user=hduser key="{{ lookup('file', 'master_id_rsa_pub') }}"
-    when: "{{ is_slave }}"
+    when: is_slave
 
   - name: disable IPV6
     tags: ipv6
@@ -87,4 +87,4 @@
       chmod 750 /app/hadoop/tmp'
 
   - include: conf-files.yml
-#  - include: format-hdfs.yml
+
