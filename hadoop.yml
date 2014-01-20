@@ -4,7 +4,7 @@
   vars:
     hostip: ${ansible_eth0.ipv4.address}
     is_master: "'{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}'"
-    is_slave:  "not '{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}"
+    is_slave:  "not '{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}'"
     dfs_replication: 2
     hadoop_version: hadoop-1.2.1
 
