@@ -50,9 +50,15 @@
     tags: ipv6
     action: lineinfile dest=/etc/sysctl.conf state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'sysctl.conf.3') }}"
 
-  - name: update ~/.bashrc file
+  - name: update ~/.bashrc file for Debian (repeat last "fi")
+    tags: bashrc
+    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'bashrc.5') }}"
+    when: ansible_os_family == "Debian"
+
+  - name: update ~/.bashrc file for non-Debian
     tags: bashrc
     action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'bashrc.4') }}"
+    when: ansible_os_family != "Debian"
 
   - name: update limits.conf file
     tags: limits
