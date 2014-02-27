@@ -6,6 +6,7 @@
     is_master: "'{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}'"
     is_slave:  "not '{{ ansible_all_ipv4_addresses[0] }}' == '{{ master_ip }}'"
     dfs_replication: 2
+    hadoop_common_url: http://apache.cc.uoc.gr/hadoop/common
     hadoop_version: hadoop-1.2.1
 
   tasks:
@@ -72,7 +73,7 @@
 
   - name: download hadoop src
     tags: downlo
-    action: get_url dest=/usr/local url=http://apache.cc.uoc.gr/hadoop/common/{{ hadoop_version }}/{{ hadoop_version }}.tar.gz
+    action: get_url dest=/usr/local url={{ hadoop_common_url }}/{{ hadoop_version }}/{{ hadoop_version }}.tar.gz
     when: result|failed
 
   - name: unzip hadoop src
