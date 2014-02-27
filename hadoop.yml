@@ -58,9 +58,16 @@
     tags: limits
     action: lineinfile dest=/etc/security/limits.conf state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'limits.conf.1') }}"
 
+  - name: copy hadoop src from local (if exists)
+    tags: copysrc
+    action: copy src={{ hadoop_version }}.tar.gz dest=/usr/local
+    register: result
+    ignore_errors: True
+
   - name: download hadoop src
     tags: downlo
     action: get_url dest=/usr/local url=http://apache.cc.uoc.gr/hadoop/common/{{ hadoop_version }}/{{ hadoop_version }}.tar.gz
+    when: result|failed
 
   - name: unzip hadoop src
     tags: unzip
