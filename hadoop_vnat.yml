@@ -1,0 +1,107 @@
+---
+- hosts: all
+  user: root
+  vars:
+    is_master: False
+    is_slave:  False
+    dfs_replication: 2
+    hadoop_common_url: http://archive.apache.org/dist/hadoop/common
+    hadoop_version: hadoop-1.2.1
+
+  tasks:
+  - name: install jdk 1.7
+    action: apt name=openjdk-7-jdk state=latest install_recommends=no 
+
+  - name: install sudo
+    action: apt name=sudo state=latest install_recommends=no 
+
+  - name: create hadoop group
+    action: group name=hadoop state=present
+
+  - name: create hadoop user
+    action: user name=hduser group=hadoop ssh_key_file=/root/.ssh/id_rsa.pub shell=/bin/bash
+
+  - name: create hduser .ssh directory
+    action: file path=~hduser/.ssh owner=hduser group=hadoop mode=0700 state=directory
+
+  - name: copy authorized_keys to hduser .ssh directory
+    tags: copyauth
+    action: copy src=/root/.ssh/id_rsa.pub dest=~hduser/.ssh/authorized_keys owner=hduser group=hadoop mode=0600
+
+  - name: add entries to /etc/hosts
+    tags: etchosts
+    action: lineinfile dest=/etc/hosts state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'vnat/etchosts') }}"
+
+  - name: prepare ssh 
+    tags: preparessh
+    action: |
+      command /bin/sh -c '
+      sudo -u hduser ssh-keygen -q -t rsa -P "" -f /home/hduser/.ssh/id_rsa
+      sudo -u hduser cat /home/hduser/.ssh/id_rsa.pub >> /home/hduser/.ssh/authorized_keys'
+    when: is_master
+
+  - name: copy master public ssh key to local box
+    tags: copymasterssh
+    local_action: command  scp -v -o StrictHostKeyChecking=no root@{{ master_ip }}:/home/hduser/.ssh/id_rsa.pub master_id_rsa_pub
+    when: is_master
+
+  - name: copy local box master ssh key to hduser
+    tags: slavessh
+    authorized_key: user=hduser key="{{ lookup('file', 'master_id_rsa_pub') }}"
+    when: is_slave
+
+  - name: disable IPV6
+    tags: ipv6
+    action: lineinfile dest=/etc/sysctl.conf state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'sysctl.conf.3') }}"
+
+  - name: update ~/.bashrc file for Debian (repeat last "fi")
+    tags: bashrc
+    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'bashrc.5') }}"
+    when: ansible_os_family == "Debian"
+
+  - name: update ~/.bashrc file for non-Debian
+    tags: bashrc
+    action: lineinfile dest=/home/hduser/.bashrc state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'bashrc.4') }}"
+    when: ansible_os_family != "Debian"
+
+  - name: update limits.conf file
+    tags: limits
+    action: lineinfile dest=/etc/security/limits.conf state=present insertafter=EOF regexp="^"  line="{{ lookup('file', 'limits.conf.1') }}"
+
+  - name: copy hadoop src from local (if exists)
+    tags: copysrc
+    action: copy src={{ hadoop_version }}.tar.gz dest=/usr/local
+    register: result
+    ignore_errors: True
+
+  - name: download hadoop src
+    tags: downlo
+    action: get_url dest=/usr/local url={{ hadoop_common_url }}/{{ hadoop_version }}/{{ hadoop_version }}.tar.gz
+    when: result|failed
+
+  - name: unzip hadoop src
+    tags: unzip
+    action: command tar -xzf {{ hadoop_version }}.tar.gz chdir=/usr/local
+
+  - name: chown hadoop-src from root to hadoop group
+    tags: chown
+    action: |
+      command /bin/sh -c '
+      cd /usr/local
+      mv {{ hadoop_version }} hadoop
+      chown -R hduser:hadoop hadoop'
+
+  - name: update hadoop-env.sh file
+    tags: env-sh
+    action: lineinfile dest=/usr/local/hadoop/conf/hadoop-env.sh state=present insertafter=EOF regexp="^\# export JAVA_HOME=" line="export JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64"
+
+  - name: create app/hadoop/tmp to store HDFS
+    tags: tmp
+    action: |
+      command /bin/sh -c '
+      mkdir -p /app/hadoop/tmp
+      chown hduser:hadoop /app/hadoop/tmp
+      chmod 750 /app/hadoop/tmp'
+
+  - include: vnat/conf-files.yml
+
