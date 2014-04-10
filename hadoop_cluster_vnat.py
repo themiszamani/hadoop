@@ -189,8 +189,16 @@ def create_machine(opts, c, i):
     NetWork_free = parseNetwork(myNetworks,'public')
 
     if i==0:
-        # Get a new floating ip 
-        myIp = my_network_client.create_floatingip(NetWork_free)
+        # Get a (or create a new) floating ip 
+        FoundIp = None
+        for item in my_network_client.list_floatingips():
+            if my_network_client.get_floatingip_details(item['id'])['instance_id']==None: 
+                FoundIp = item
+             
+        if FoundIp:
+            myIp = FoundIp
+        else:
+            myIp = my_network_client.create_floatingip(NetWork_free)
         LastIp = myIp.get("floating_ip_address")
         server = c.create_server(servername, opts.flavorid, opts.imageid, 
 			     networks=[
@@ -240,7 +248,6 @@ def create_machine(opts, c, i):
         if i==0: 
             if "ipv4" in item["attachments"][2]:
                 ip = item["attachments"][2]["ipv4"]
-#        print "ip=",ip
     if ip=='':
         log.info("Error locating server ip. Execution aborted.")
         log.info("Password:"+adminPass)
@@ -262,10 +269,22 @@ def create_machine(opts, c, i):
         ssh.connect(ip, username = 'root')
         # update apt sources to retrieve packages from an ipv6 site
         ssh_cmd = 'sed -i \'1ideb http:\/\/ftp.debian.org\/debian\/ wheezy main\' /etc/apt/sources.list'
-        log.info("ssh as root@%s succeeded. Executing: %s", ip, ssh_cmd)
+        log.info("ssh as root@%s succeeded", ip)
+        log.info("Executing: %s", ssh_cmd)
         stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
         time.sleep(2)
         output = stdout.readlines()
+        ssh_cmd = 'sed -i \'1ideb-src http:\/\/ftp.debian.org\/debian\/ wheezy-updates main\' /etc/apt/sources.list'
+        log.info("Executing: %s", ssh_cmd)
+        stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
+        time.sleep(2)
+        output = stdout.readlines()
+        ssh_cmd = 'sed -i \'1ideb http:\/\/ftp.debian.org\/debian\/ wheezy-updates main\' /etc/apt/sources.list'
+        log.info("Executing: %s", ssh_cmd)
+        stdin, stdout, stderr = ssh.exec_command(ssh_cmd)
+        time.sleep(2)
+        output = stdout.readlines()
+
         # install python
         ssh_cmd = 'apt-get update; apt-get -y install python python-apt'
         log.info("Executing: %s", ssh_cmd)
@@ -439,7 +458,6 @@ def main():
     cluster = [(cluster0[0][0], cluster0[0][1][2]["ipv4"], cluster0[0][2])]	# master IP, different index 
     cluster2 = [(s[0], s[1][1]['ipv4'], int(s[2])) for s in cluster0[1:]]	# slave IPs
     cluster += cluster2
-#    print cluster
 
     # Prepare Ansible-Hadoop config files (hosts, conf/slaves. vnat/etchosts)
     hosts = open(opts.hadoop_dir+'/hosts', 'w')
