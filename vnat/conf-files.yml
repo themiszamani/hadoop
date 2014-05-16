@@ -1,24 +1,24 @@
 ---
   - name: copy core-site.xml to /usr/local/hadoop/conf directory
     tags: coresite
-    action: template src=/root/hadoop/vnat/core-site.j2 dest=/usr/local/hadoop/conf/core-site.xml
+    action: template src=./vnat/core-site.j2 dest=/usr/local/hadoop/conf/core-site.xml
 
   - name: copy mapred-site.xml to /usr/local/hadoop/conf directory
     tags: mapredsite
-    action: template src=/root/hadoop/vnat/mapred-site.j2 dest=/usr/local/hadoop/conf/mapred-site.xml
+    action: template src=./vnat/mapred-site.j2 dest=/usr/local/hadoop/conf/mapred-site.xml
 
   - name: copy hdfs-site.xml (with terasort-specific values) to /usr/local/hadoop/conf directory
     tags: hdfssite
-    action: template src=/root/hadoop/vnat/hdfs-site.j2 dest=/usr/local/hadoop/conf/hdfs-site.xml
+    action: template src=./vnat/hdfs-site.j2 dest=/usr/local/hadoop/conf/hdfs-site.xml
 
   - name: create masters file
     tags: masters
-    action: template src=/root/hadoop/vnat/masters.j2 dest=/usr/local/hadoop/conf/masters
+    action: template src=./vnat/masters.j2 dest=/usr/local/hadoop/conf/masters
     when: is_master
 
   - name: create slaves file
     tags: slaves
-    action: copy src=/root/hadoop/vnat/slaves dest=/usr/local/hadoop/conf/slaves owner=hduser group=hadoop
+    action: copy src=./vnat/slaves dest=/usr/local/hadoop/conf/slaves owner=hduser group=hadoop
     when: is_master
 
 
