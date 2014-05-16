@@ -281,9 +281,8 @@ def enable_ssh_login(master_ip, slave_ip_list):
         log.info("SSH error.")
         return 
 
-#function to parse the endpoints and get the publicURL of the selected service
 def parseAstakosEndpoints(decoded_response,itemToSearch):
-
+    """ parse the endpoints and get the publicURL of the selected service """
     json.dumps(decoded_response,sort_keys=True,indent=4, separators=(',', ': '))
     jsonData = decoded_response["access"]['serviceCatalog']
     for item in jsonData:
@@ -293,14 +292,15 @@ def parseAstakosEndpoints(decoded_response,itemToSearch):
             PUBLIC_URL = details.get("publicURL")
         if name == itemToSearch:
             return PUBLIC_URL
- 
-#function to parse the endpoints and get the publicURL of the selected service
+
+
 def parseNetwork(decoded_response,itemToSearch):
-	jsonData = decoded_response
-        for item in jsonData:
-                name = item.get("public")
-                networkId=item.get("id");
-		return networkId
+    """ Parse the endpoints and get the publicURL of the selected service """
+    jsonData = decoded_response
+    for item in jsonData:
+        name = item.get("public")
+        if name == itemToSearch:
+            return item.get("id")
 
 def main():
     """Parse arguments, use kamaki to create cluster, setup using ssh"""
