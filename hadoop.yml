@@ -39,7 +39,7 @@
 
   - name: copy master public ssh key to local box
     tags: copymasterssh
-    local_action: command  scp -v -o StrictHostKeyChecking=no root@$master_ip:/home/hduser/.ssh/id_rsa.pub master_id_rsa_pub
+    local_action: command  scp -v -o StrictHostKeyChecking=no root@{{ master_ip }}:/home/hduser/.ssh/id_rsa.pub master_id_rsa_pub
     when: is_master
 
   - name: copy local box master ssh key to hduser
