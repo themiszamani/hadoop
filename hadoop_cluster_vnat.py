@@ -31,7 +31,7 @@ DEFAULT_AUTHENTICATION_URL = 'https://accounts.okeanos.grnet.gr/identity/v2.0/'
 # ACHTUNG: The script WILL upload DEFAULT_SSH_KEY into newly created instances
 DEFAULT_SSH_KEY = os.path.expanduser(os.path.join("~", ".ssh", "id_rsa_hadoop"))
 DEFAULT_SSH_PUB = os.path.expanduser(os.path.join("~", ".ssh", "id_rsa_hadoop.pub"))
-DEFAULT_HADOOP_DIR = os.path.expanduser(os.path.join("~", "hadoop"))
+DEFAULT_HADOOP_DIR = os.path.expanduser(os.curdir)
 
 CYCLADES = None
 
@@ -410,7 +410,10 @@ def main():
     # Initialize
     nodes = []
     masterName = ''
+
     # Create a file to store the root password for later use
+    if not os.path.exists(opts.hadoop_dir+'/bak'):
+        os.makedirs(opts.hadoop_dir+'/bak')
     pass_fname = opts.hadoop_dir+'/bak/adminPass'+str(datetime.now())[:19].replace(' ', '')
     adminPass_f = open(pass_fname, 'w')
 
